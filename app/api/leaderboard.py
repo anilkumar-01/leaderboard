@@ -1,9 +1,8 @@
 # app/api/leaderboard.py
 from typing import Any, List
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Path, Query, BackgroundTasks
 from sqlalchemy.orm import Session
-from sqlalchemy import text, func
-from sqlalchemy.sql.expression import desc
+from sqlalchemy import text, func, desc
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.session import get_db
@@ -13,29 +12,26 @@ from app.models.game import GameSession, Leaderboard
 from app.schemas.leaderboard import ScoreSubmit, LeaderboardResponse, LeaderboardEntry, PlayerRank
 from app.schemas.base import MessageResponse, ResponseBase
 from app.api.dependencies import get_current_active_user
+from app.core.cache import (
+    cached_leaderboard, cached_player_rank, 
+    invalidate_leaderboard_cache, invalidate_player_rank_cache
+)
 
 router = APIRouter(prefix="/leaderboard", tags=["leaderboard"])
 
-def update_leaderboard_ranks(db: Session):
+async def update_leaderboard_ranks_background(db: Session):
     """
     Update ALL ranks in the leaderboard based on total scores.
-    This function recalculates and updates ranks for all users when called,
-    ensuring the entire leaderboard is consistent.
+    This runs as a background task to avoid blocking the API response.
     
     Args:
         db: Database session
     """
-    # Lock the entire leaderboard table to prevent concurrent updates
-    # during rank recalculation
     try:
         # First, obtain an advisory lock to prevent concurrent rank updates
-        # This ensures that only one rank update process runs at a time
         db.execute(text("SELECT pg_advisory_xact_lock(42)"))
         
         # Update all ranks using window function in raw SQL
-        # The RANK() function ensures proper rank assignment even with ties
-        import time
-        t1 = time.time()
         db.execute(text("""
             UPDATE leaderboard
             SET rank = ranks.rank
@@ -50,66 +46,62 @@ def update_leaderboard_ranks(db: Session):
         """))
         
         db.commit()
-        print("time taken", time.time()- t1)
         
-        # Log or metric could be added here to track ranking update frequency
+        # Invalidate caches after ranks update
+        invalidate_leaderboard_cache()
+        invalidate_player_rank_cache()
+        
     except SQLAlchemyError as e:
         db.rollback()
-        # Log the error details for monitoring
         print(f"Error updating leaderboard ranks: {str(e)}")
-        raise
 
 @router.post("/submit", response_model=ResponseBase[MessageResponse], status_code=201)
 async def submit_score(
     *,
     db: Session = Depends(get_db),
     score_data: ScoreSubmit,
-    # current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
+    background_tasks: BackgroundTasks
 ) -> Any:
     """
     Submit a new score for the current authenticated user.
-    Uses database transactions to handle concurrent requests safely.
-    After updating the user's score, this recalculates all user ranks
-    to ensure the entire leaderboard remains consistent.
+    Optimized for performance by running rank updates as a background task
+    and using proper transaction isolation.
     
     Args:
         db: Database session
         score_data: Score data (score must be between 0 and 10000)
         current_user: Current authenticated user
+        background_tasks: FastAPI background tasks
         
     Returns:
         Message that score was submitted successfully
     """
-    # Create a new session for the score submission transaction
+    # Validate score range
+    if score_data.score < 0 or score_data.score > 10000:
+        raise BadRequestError(f"Score must be between 0 and 10000, got {score_data.score}")
+    
     try:
-        # Start transaction for score update
-        # Get user's leaderboard entry with FOR UPDATE lock to prevent race conditions
-        # Double-check score range (server-side validation in addition to schema validation)
-        if score_data.score < 0 or score_data.score > 10000:
-            raise BadRequestError(f"Score must be between 0 and 10000, got {score_data.score}")
-        
+        # Start transaction for score update with row-level locking
         leaderboard_entry = db.query(Leaderboard).filter(
-            Leaderboard.user_id == score_data.user_id
+            Leaderboard.user_id == current_user.id
         ).with_for_update().first()
         
         # Insert the new game session
         new_session = GameSession(
-            user_id=score_data.user_id,
+            user_id=current_user.id,
             score=score_data.score,
             game_mode=score_data.game_mode
         )
         db.add(new_session)
         
-        # Store original score for determining if ranking update is needed
-        original_score = 0
         if leaderboard_entry:
-            original_score = leaderboard_entry.total_score
             # Update existing leaderboard entry
             leaderboard_entry.total_score += score_data.score
         else:
             # Create new leaderboard entry
             new_leaderboard_entry = Leaderboard(
-                user_id=score_data.user_id,
+                user_id=current_user.id,
                 total_score=score_data.score
             )
             db.add(new_leaderboard_entry)
@@ -117,20 +109,24 @@ async def submit_score(
         # Commit the transaction to save the score update
         db.commit()
         
-        # If score was added successfully, update all ranks in the leaderboard
-        # This ensures that all users' ranks are updated correctly
-        update_leaderboard_ranks(db)
+        # Immediately invalidate this user's rank cache
+        invalidate_player_rank_cache(current_user.id)
+        
+        # Schedule rank updates as a background task
+        # This prevents the API from blocking while ranks are recalculated
+        background_tasks.add_task(update_leaderboard_ranks_background, db)
         
         return ResponseBase[MessageResponse](
             success=True,
             message="Score submitted successfully",
-            data=MessageResponse(message="Score submitted successfully and all ranks updated")
+            data=MessageResponse(message="Score submitted successfully and ranks will be updated shortly")
         )
     except SQLAlchemyError as e:
         db.rollback()
         raise BadRequestError(f"Error submitting score: {str(e)}")
 
 @router.get("/top", response_model=LeaderboardResponse)
+@cached_leaderboard
 async def get_leaderboard(
     *,
     db: Session = Depends(get_db),
@@ -139,6 +135,7 @@ async def get_leaderboard(
 ) -> Any:
     """
     Get top players from the leaderboard.
+    Optimized with query tuning and caching.
     
     Args:
         db: Database session
@@ -151,15 +148,16 @@ async def get_leaderboard(
     offset = (page - 1) * limit
     
     try:
-        # Get total entries
-        total_entries = db.query(Leaderboard).count()
+        # Use count query optimization for total entries
+        total_entries = db.query(func.count(Leaderboard.id)).scalar()
         
-        # Get top players ordered by rank
+        # Use a single optimized query with joins and explicit columns to select
+        # This reduces the amount of data transferred from the database
         entries = db.query(
-            Leaderboard.rank,
-            Leaderboard.total_score,
-            Leaderboard.user_id,
-            User.username
+            Leaderboard.rank.label('rank'),
+            Leaderboard.total_score.label('total_score'),
+            Leaderboard.user_id.label('user_id'),
+            User.username.label('username')
         ).join(
             User, Leaderboard.user_id == User.id
         ).order_by(
@@ -183,6 +181,7 @@ async def get_leaderboard(
         raise BadRequestError(f"Error retrieving leaderboard: {str(e)}")
 
 @router.get("/rank/{user_id}", response_model=PlayerRank)
+@cached_player_rank
 async def get_player_rank(
     *,
     db: Session = Depends(get_db),
@@ -190,6 +189,7 @@ async def get_player_rank(
 ) -> Any:
     """
     Get a player's current rank.
+    Optimized with caching and query optimization.
     
     Args:
         db: Database session
@@ -199,27 +199,28 @@ async def get_player_rank(
         Player rank
     """
     try:
-        # Check if user exists
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise NotFoundError(detail="User not found")
-        
-        # Get player's rank
+        # Use a single optimized query with a direct join rather than two separate queries
         entry = db.query(
-            Leaderboard.rank,
-            Leaderboard.total_score,
-            User.username
+            Leaderboard.rank.label('rank'),
+            Leaderboard.total_score.label('total_score'),
+            User.username.label('username'),
+            User.id.label('user_id')
         ).join(
             User, Leaderboard.user_id == User.id
         ).filter(
-            Leaderboard.user_id == user_id
+            User.id == user_id
         ).first()
         
         if not entry:
-            raise NotFoundError(detail="Player has not yet been ranked")
+            # Check if user exists but has no rank
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                raise NotFoundError(detail="User not found")
+            else:
+                raise NotFoundError(detail="Player has not yet been ranked")
         
         return PlayerRank(
-            user_id=user_id,
+            user_id=entry.user_id,
             username=entry.username,
             rank=entry.rank,
             total_score=entry.total_score
