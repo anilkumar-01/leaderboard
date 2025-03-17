@@ -1,13 +1,11 @@
 # app/schemas/auth.py
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, validator
 from typing import Optional
 from datetime import datetime
 
 class UserBase(BaseModel):
     """Base user schema."""
     username: str
-    email: EmailStr
-    is_active: bool = True
 
 class UserCreate(UserBase):
     """Schema for user creation."""

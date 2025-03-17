@@ -9,3 +9,5 @@ class User(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, nullable=False, index=True)
+    hashed_password = Column(String, nullable=False)
+    join_date = Column(DateTime(timezone=True), server_default=func.now())
