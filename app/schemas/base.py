@@ -15,5 +15,5 @@ class ResponseBase(BaseModel, Generic[T]):
     message: Optional[str] = None
     data: Optional[T] = None
 
-    class Config:
+    class ConfigDict:
         arbitrary_types_allowed = True

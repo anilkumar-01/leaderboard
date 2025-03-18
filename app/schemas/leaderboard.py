@@ -1,19 +1,19 @@
 # app/schemas/leaderboard.py
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator, Field
 from typing import List, Optional
+
+from app.core.errors import BadRequestError
 
 class ScoreSubmit(BaseModel):
     """Schema for score submission."""
-    user_id: int
-    score: int
+    user_id: int 
+    score: int = Field(..., ge=0, le=10000)
     game_mode: Optional[str] = "default"
     
-    @validator('score')
+    @field_validator('score')
     def score_must_be_in_valid_range(cls, v):
-        if v < 0:
-            raise ValueError('score must be non-negative')
-        if v > 10000:
-            raise ValueError('score must not exceed 10000')
+        if v < 0 or v > 10000:
+             raise BadRequestError(f"Score must be between 0 and 10000, got {v}")
         return v
     
 class LeaderboardEntry(BaseModel):
@@ -23,7 +23,7 @@ class LeaderboardEntry(BaseModel):
     username: str
     total_score: int
     
-    class Config:
+    class ConfigDict:
         from_attributes = True
 
 class LeaderboardResponse(BaseModel):
@@ -31,7 +31,7 @@ class LeaderboardResponse(BaseModel):
     total_entries: int
     leaderboard: List[LeaderboardEntry]
     
-    class Config:
+    class ConfigDict:
         from_attributes = True
 
 class PlayerRank(BaseModel):
@@ -41,5 +41,5 @@ class PlayerRank(BaseModel):
     rank: int
     total_score: int
     
-    class Config:
+    class ConfigDict:
         from_attributes = True

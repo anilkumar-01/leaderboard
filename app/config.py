@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     CORS_METHODS: list = ["*"]
     CORS_HEADERS: list = ["*"]
 
-    class Config:
+    class ConfigDict:
         env_file = ".env"
 
 settings = Settings()

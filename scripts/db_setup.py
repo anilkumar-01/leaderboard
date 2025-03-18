@@ -76,10 +76,21 @@ def add_indexes():
     try:
         # Add indexes for better performance
         db.execute(text("""
+            -- Basic indexes
             CREATE INDEX IF NOT EXISTS idx_game_sessions_user_id ON game_sessions(user_id);
             CREATE INDEX IF NOT EXISTS idx_leaderboard_user_id ON leaderboard(user_id);
             CREATE INDEX IF NOT EXISTS idx_leaderboard_rank ON leaderboard(rank);
             CREATE INDEX IF NOT EXISTS idx_leaderboard_total_score ON leaderboard(total_score DESC);
+            
+            -- Additional optimized indexes for core APIs
+            CREATE INDEX IF NOT EXISTS idx_leaderboard_score_rank ON leaderboard(total_score DESC, rank);
+            CREATE INDEX IF NOT EXISTS idx_game_sessions_user_timestamp ON game_sessions(user_id, timestamp DESC);
+            CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+            
+            -- Analyze tables for query planner optimization
+            ANALYZE leaderboard;
+            ANALYZE users;
+            ANALYZE game_sessions;
         """))
         db.commit()
         print("Indexes added successfully!")
