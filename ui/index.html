@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gaming Leaderboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <style>
+        .leaderboard-card {
+            background-color: #1a1a2e;
+            color: #ffffff;
+            transition: all 0.3s ease;
+        }
+        .leaderboard-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        .rank-1 {
+            background-color: #ffd700;
+            color: #1a1a2e;
+        }
+        .rank-2 {
+            background-color: #c0c0c0;
+            color: #1a1a2e;
+        }
+        .rank-3 {
+            background-color: #cd7f32;
+            color: #1a1a2e;
+        }
+        .pulse-animation {
+            animation: pulse 2s;
+        }
+        @keyframes pulse {
+            0% {
+                background-color: #4f46e5;
+            }
+            50% {
+                background-color: #818cf8;
+            }
+            100% {
+                background-color: #1a1a2e;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <header class="bg-gray-800 shadow-lg py-6">
+        <div class="container mx-auto px-4">
+            <h1 class="text-3xl font-bold text-center text-indigo-400">Gaming Leaderboard</h1>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Leaderboard Section -->
+            <div class="lg:col-span-2">
+                <div class="bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-indigo-400">Top 10 Players</h2>
+                        <div>
+                            <span id="last-updated" class="text-gray-400 text-sm mr-3"></span>
+                            <button id="refresh-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md transition duration-300">
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full">
+                            <thead>
+                                <tr class="text-left text-gray-400 border-b border-gray-700">
+                                    <th class="py-3 px-4">Rank</th>
+                                    <th class="py-3 px-4">Player</th>
+                                    <th class="py-3 px-4 text-right">Score</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leaderboard-body">
+                                <!-- Leaderboard data will be loaded here -->
+                                <tr>
+                                    <td colspan="3" class="py-4 px-4 text-center text-gray-400">Loading leaderboard...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-4 text-sm text-gray-400 flex items-center">
+                        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-indigo-400" id="auto-refresh-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Auto-refreshing every <span id="refresh-seconds">5</span> seconds</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Player Lookup Section -->
+            <div class="lg:col-span-1">
+                <div class="bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
+                    <h2 class="text-2xl font-bold text-indigo-400 mb-6">Player Rank Lookup</h2>
+                    <div class="mb-6">
+                        <label for="user-id" class="block mb-2 text-sm font-medium text-gray-300">Player ID</label>
+                        <input type="number" id="user-id" class="bg-gray-700 text-white rounded-md px-4 py-2 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter player ID">
+                    </div>
+                    <button id="lookup-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-4 rounded-md transition duration-300">
+                        Look Up Rank
+                    </button>
+                    <div id="player-result" class="mt-6 hidden">
+                        <div class="bg-gray-900 rounded-lg p-4 border border-gray-700">
+                            <h3 id="player-name" class="text-xl font-bold text-indigo-400 mb-2"></h3>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p class="text-sm text-gray-400">Rank</p>
+                                    <p id="player-rank" class="text-2xl font-bold"></p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-400">Score</p>
+                                    <p id="player-score" class="text-2xl font-bold"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="player-error" class="mt-6 hidden">
+                        <div class="bg-red-900/30 text-red-300 rounded-lg p-4 border border-red-800">
+                            <p id="error-message"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Score Submission Demo -->
+                <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+                    <h2 class="text-2xl font-bold text-indigo-400 mb-6">Submit Score (Demo)</h2>
+                    <div class="mb-4">
+                        <label for="demo-user-id" class="block mb-2 text-sm font-medium text-gray-300">Player ID</label>
+                        <input type="number" id="demo-user-id" class="bg-gray-700 text-white rounded-md px-4 py-2 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter player ID">
+                    </div>
+                    <div class="mb-6">
+                        <label for="demo-score" class="block mb-2 text-sm font-medium text-gray-300">Score (0-10,000)</label>
+                        <input type="number" id="demo-score" min="0" max="10000" class="bg-gray-700 text-white rounded-md px-4 py-2 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter score">
+                    </div>
+                    <button id="submit-score-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-md transition duration-300">
+                        Submit Score
+                    </button>
+                    <div id="submit-result" class="mt-4 hidden">
+                        <div class="bg-green-900/30 text-green-300 rounded-lg p-3 border border-green-800 text-sm">
+                            <p id="submit-message"></p>
+                        </div>
+                    </div>
+                    <div id="submit-error" class="mt-4 hidden">
+                        <div class="bg-red-900/30 text-red-300 rounded-lg p-3 border border-red-800 text-sm">
+                            <p id="submit-error-message"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-gray-800 py-6 mt-12">
+        <div class="container mx-auto px-4">
+            <p class="text-center text-gray-400">Gaming Leaderboard Demo &copy; 2025</p>
+        </div>
+    </footer>
+
+    <script>
+        // API configuration
+        const API_BASE_URL = 'http://localhost:8000/api';
+        const REFRESH_INTERVAL = 5; // seconds
+        
+        // DOM Elements
+        const leaderboardBody = document.getElementById('leaderboard-body');
+        const lastUpdatedSpan = document.getElementById('last-updated');
+        const refreshBtn = document.getElementById('refresh-btn');
+        const userIdInput = document.getElementById('user-id');
+        const lookupBtn = document.getElementById('lookup-btn');
+        const playerResult = document.getElementById('player-result');
+        const playerError = document.getElementById('player-error');
+        const playerName = document.getElementById('player-name');
+        const playerRank = document.getElementById('player-rank');
+        const playerScore = document.getElementById('player-score');
+        const errorMessage = document.getElementById('error-message');
+        const refreshSeconds = document.getElementById('refresh-seconds');
+        const demoUserIdInput = document.getElementById('demo-user-id');
+        const demoScoreInput = document.getElementById('demo-score');
+        const submitScoreBtn = document.getElementById('submit-score-btn');
+        const submitResult = document.getElementById('submit-result');
+        const submitError = document.getElementById('submit-error');
+        const submitMessage = document.getElementById('submit-message');
+        const submitErrorMessage = document.getElementById('submit-error-message');
+
+        // Set refresh interval display
+        refreshSeconds.textContent = REFRESH_INTERVAL;
+
+        // Function to format date as relative time
+        function formatRelativeTime(date) {
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000); // difference in seconds
+            
+            if (diff < 10) return 'just now';
+            if (diff < 60) return `${diff} seconds ago`;
+            
+            const mins = Math.floor(diff / 60);
+            if (mins === 1) return '1 minute ago';
+            if (mins < 60) return `${mins} minutes ago`;
+            
+            const hours = Math.floor(mins / 60);
+            if (hours === 1) return '1 hour ago';
+            return `${hours} hours ago`;
+        }
+
+        // Function to load leaderboard data
+        async function loadLeaderboard() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/leaderboard/top?limit=10`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                renderLeaderboard(data.leaderboard);
+                
+                // Update last refreshed timestamp
+                const now = new Date();
+                lastUpdatedSpan.textContent = `Updated: ${formatRelativeTime(now)}`;
+                
+                return data;
+            } catch (error) {
+                console.error('Error loading leaderboard:', error);
+                leaderboardBody.innerHTML = `
+                    <tr>
+                        <td colspan="3" class="py-4 px-4 text-center text-red-400">
+                            Failed to load leaderboard. Please try again.
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        // Function to render leaderboard data
+        function renderLeaderboard(leaderboardData) {
+            // Store current data for comparison
+            const currentData = getCurrentLeaderboardData();
+            
+            // Generate new HTML
+            let html = '';
+            leaderboardData.forEach(entry => {
+                const rankClass = entry.rank <= 3 ? `rank-${entry.rank}` : '';
+                const shouldPulse = shouldPulseRow(entry, currentData);
+                
+                html += `
+                    <tr class="border-b border-gray-700 leaderboard-card ${rankClass} ${shouldPulse ? 'pulse-animation' : ''}" data-user-id="${entry.user_id}" data-rank="${entry.rank}" data-score="${entry.total_score}">
+                        <td class="py-4 px-4 font-bold">#${entry.rank}</td>
+                        <td class="py-4 px-4">${entry.username}</td>
+                        <td class="py-4 px-4 text-right font-mono">${entry.total_score.toLocaleString()}</td>
+                    </tr>
+                `;
+            });
+            
+            leaderboardBody.innerHTML = html;
+        }
+
+        // Get current leaderboard data from DOM
+        function getCurrentLeaderboardData() {
+            const rows = leaderboardBody.querySelectorAll('tr');
+            const currentData = [];
+            
+            rows.forEach(row => {
+                const userId = row.getAttribute('data-user-id');
+                const rank = row.getAttribute('data-rank');
+                const score = row.getAttribute('data-score');
+                
+                if (userId && rank && score) {
+                    currentData.push({
+                        user_id: parseInt(userId),
+                        rank: parseInt(rank),
+                        total_score: parseInt(score)
+                    });
+                }
+            });
+            
+            return currentData;
+        }
+
+        // Determine if a row should pulse (has changed)
+        function shouldPulseRow(newEntry, currentData) {
+            if (!currentData || currentData.length === 0) return false;
+            
+            const currentEntry = currentData.find(entry => entry.user_id === newEntry.user_id);
+            if (!currentEntry) return true; // New entry
+            
+            return currentEntry.rank !== newEntry.rank || currentEntry.total_score !== newEntry.total_score;
+        }
+
+        // Function to look up player rank
+        async function lookupPlayerRank(userId) {
+            try {
+                playerResult.classList.add('hidden');
+                playerError.classList.add('hidden');
+                
+                if (!userId || isNaN(parseInt(userId))) {
+                    throw new Error('Please enter a valid player ID');
+                }
+                
+                const response = await fetch(`${API_BASE_URL}/leaderboard/rank/${userId}`);
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Display player data
+                playerName.textContent = data.username;
+                playerRank.textContent = `#${data.rank}`;
+                playerScore.textContent = data.total_score.toLocaleString();
+                playerResult.classList.remove('hidden');
+                
+            } catch (error) {
+                errorMessage.textContent = error.message;
+                playerError.classList.remove('hidden');
+            }
+        }
+
+        // Function to submit a score (demo)
+        async function submitScore(userId, score) {
+            try {
+                submitResult.classList.add('hidden');
+                submitError.classList.add('hidden');
+                
+                if (!userId || isNaN(parseInt(userId))) {
+                    throw new Error('Please enter a valid player ID');
+                }
+                
+                if (!score || isNaN(parseInt(score)) || score < 0 || score > 10000) {
+                    throw new Error('Please enter a valid score (0-10,000)');
+                }
+                
+                const response = await fetch(`${API_BASE_URL}/leaderboard/submit`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        user_id: parseInt(userId),
+                        score: parseInt(score)
+                    }),
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Show success message
+                submitMessage.textContent = data.message || 'Score submitted successfully!';
+                submitResult.classList.remove('hidden');
+                
+                // Clear form
+                demoScoreInput.value = '';
+                
+                // Refresh leaderboard after a short delay
+                setTimeout(loadLeaderboard, 1000);
+                
+            } catch (error) {
+                submitErrorMessage.textContent = error.message;
+                submitError.classList.remove('hidden');
+            }
+        }
+
+        // Initial load
+        loadLeaderboard();
+        
+        // Setup auto-refresh
+        let refreshTimer = setInterval(loadLeaderboard, REFRESH_INTERVAL * 1000);
+
+        // Event Listeners
+        refreshBtn.addEventListener('click', () => {
+            loadLeaderboard();
+            
+            // Reset the auto-refresh timer
+            clearInterval(refreshTimer);
+            refreshTimer = setInterval(loadLeaderboard, REFRESH_INTERVAL * 1000);
+        });
+
+        lookupBtn.addEventListener('click', () => {
+            lookupPlayerRank(userIdInput.value);
+        });
+
+        userIdInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                lookupPlayerRank(userIdInput.value);
+            }
+        });
+
+        submitScoreBtn.addEventListener('click', () => {
+            submitScore(demoUserIdInput.value, demoScoreInput.value);
+        });
+
+        // Update the "last updated" text every minute
+        setInterval(() => {
+            const lastUpdateText = lastUpdatedSpan.textContent;
+            if (lastUpdateText.startsWith('Updated:')) {
+                const updateTime = new Date();
+                updateTime.setSeconds(updateTime.getSeconds() - REFRESH_INTERVAL);
+                lastUpdatedSpan.textContent = `Updated: ${formatRelativeTime(updateTime)}`;
+            }
+        }, 60000);
+    </script>
+</body>
+</html>
