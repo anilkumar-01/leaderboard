@@ -1,0 +1,36 @@
+Low-Level Design
+Database Schema
+Copyusers
+├── id (PK)
+├── username (UNIQUE)
+├── hashed_password
+├── join_date
+
+game_sessions
+├── id (PK)
+├── user_id (FK → users.id)
+├── score
+├── game_mode
+└── timestamp
+
+leaderboard
+├── id (PK)
+├── user_id (FK → users.id, UNIQUE)
+├── total_score
+└── rank
+API Endpoints
+
+Authentication
+
+POST /api/auth/signup - Register new user
+POST /api/auth/login - Login and get JWT token
+
+
+Leaderboard
+
+POST /api/leaderboard/submit - Submit a score
+GET /api/leaderboard/top - Get top players
+GET /api/leaderboard/rank/{user_id} - Get player rank
+
+
+

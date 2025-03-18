@@ -10,6 +10,7 @@ Player Ranking - Check a specific player's current ranking
 Project Structure
 The project follows a modular structure for better organization and maintainability:
 
+<!-- Project Structure -->
 gaming_leaderboard/
 │
 ├── app/                              # Main application package
