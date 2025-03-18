@@ -1,0 +1,85 @@
+High-Level Design
+System Overview
+The Gaming Leaderboard API is a RESTful service designed to track and display player performance in competitive games. It provides functionality for submitting scores, viewing leaderboards, and checking player rankings.
+Architecture
+The system follows a layered architecture:
+
+API Layer
+
+REST endpoints for client interaction
+Request validation and response formatting
+Rate limiting and security controls
+
+
+Service Layer
+
+Business logic implementation
+Caching strategies
+Transaction management
+
+
+Data Access Layer
+
+Database interaction through ORM
+Query optimization
+Data consistency maintenance
+
+
+
+Key Components
+
+Authentication System
+
+JWT-based token authentication
+Password hashing with bcrypt
+User registration and login flows
+
+
+Leaderboard Engine
+
+Score submission and validation
+Rank calculation using SQL window functions
+Background processing for non-blocking operations
+
+
+Caching System
+
+In-memory caching with TTL
+Intelligent cache invalidation
+Response acceleration
+
+
+API Protection
+
+Tiered rate limiting
+Bot detection
+Security middleware
+
+
+
+Data Flow
+
+Score Submission
+
+Client submits score → Authentication → Validation → Update user score → Trigger rank recalculation → Return success response
+
+
+Leaderboard Retrieval
+
+Client requests leaderboard → Check cache → If cache miss, query database → Format response → Cache result → Return response
+
+
+Rank Lookup
+
+Client requests player rank → Check cache → If cache miss, query database → Format response → Cache result → Return response
+
+
+
+Technology Stack
+
+Backend Framework: FastAPI (Python)
+Database: PostgreSQL
+ORM: SQLAlchemy
+Caching: In-memory with TTL
+Authentication: JWT
+Deployment: Docker containerization
