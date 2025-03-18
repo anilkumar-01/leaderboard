@@ -16,7 +16,9 @@ from app.core.cache import (
     cached_leaderboard, cached_player_rank, 
     invalidate_leaderboard_cache, invalidate_player_rank_cache
 )
+from app.core.rate_limiter import submit_score_limiter, get_player_rank_limiter, get_leaderboard_limiter
 
+import time
 router = APIRouter(prefix="/leaderboard", tags=["leaderboard"])
 
 async def update_leaderboard_ranks_background(db: Session):
@@ -40,7 +42,6 @@ async def update_leaderboard_ranks_background(db: Session):
                     user_id, 
                     RANK() OVER (ORDER BY total_score DESC) as rank
                 FROM leaderboard
-                FOR UPDATE
             ) ranks
             WHERE leaderboard.user_id = ranks.user_id
         """))
@@ -49,7 +50,6 @@ async def update_leaderboard_ranks_background(db: Session):
         
         # Invalidate caches after ranks update
         invalidate_leaderboard_cache()
-        invalidate_player_rank_cache()
         
     except SQLAlchemyError as e:
         db.rollback()
@@ -60,8 +60,9 @@ async def submit_score(
     *,
     db: Session = Depends(get_db),
     score_data: ScoreSubmit,
-    current_user: User = Depends(get_current_active_user),
-    background_tasks: BackgroundTasks
+    # current_user: User = Depends(get_current_active_user),
+    background_tasks: BackgroundTasks,
+    _: bool = Depends(submit_score_limiter) 
 ) -> Any:
     """
     Submit a new score for the current authenticated user.
@@ -77,6 +78,11 @@ async def submit_score(
     Returns:
         Message that score was submitted successfully
     """
+    # Validate user in db
+    user = db.query(User).filter(User.id == score_data.user_id)
+    if not user:
+        raise NotFoundError(f"User not found")
+
     # Validate score range
     if score_data.score < 0 or score_data.score > 10000:
         raise BadRequestError(f"Score must be between 0 and 10000, got {score_data.score}")
@@ -84,12 +90,12 @@ async def submit_score(
     try:
         # Start transaction for score update with row-level locking
         leaderboard_entry = db.query(Leaderboard).filter(
-            Leaderboard.user_id == current_user.id
+            Leaderboard.user_id == score_data.user_id
         ).with_for_update().first()
         
         # Insert the new game session
         new_session = GameSession(
-            user_id=current_user.id,
+            user_id=score_data.user_id,
             score=score_data.score,
             game_mode=score_data.game_mode
         )
@@ -101,7 +107,7 @@ async def submit_score(
         else:
             # Create new leaderboard entry
             new_leaderboard_entry = Leaderboard(
-                user_id=current_user.id,
+                user_id=score_data.user_id,
                 total_score=score_data.score
             )
             db.add(new_leaderboard_entry)
@@ -110,12 +116,12 @@ async def submit_score(
         db.commit()
         
         # Immediately invalidate this user's rank cache
-        invalidate_player_rank_cache(current_user.id)
+        invalidate_player_rank_cache(score_data.user_id)
         
         # Schedule rank updates as a background task
         # This prevents the API from blocking while ranks are recalculated
         background_tasks.add_task(update_leaderboard_ranks_background, db)
-        
+       
         return ResponseBase[MessageResponse](
             success=True,
             message="Score submitted successfully",
@@ -131,7 +137,8 @@ async def get_leaderboard(
     *,
     db: Session = Depends(get_db),
     limit: int = Query(10, ge=1, le=100, description="Number of entries to return"),
-    page: int = Query(1, ge=1, description="Page number")
+    page: int = Query(1, ge=1, description="Page number"),
+    _: bool = Depends(get_leaderboard_limiter) 
 ) -> Any:
     """
     Get top players from the leaderboard.
@@ -185,7 +192,8 @@ async def get_leaderboard(
 async def get_player_rank(
     *,
     db: Session = Depends(get_db),
-    user_id: int = Path(..., description="User ID to get rank for")
+    user_id: int = Path(..., description="User ID to get rank for"),
+    _: bool = Depends(get_player_rank_limiter) 
 ) -> Any:
     """
     Get a player's current rank.
