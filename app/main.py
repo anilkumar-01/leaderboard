@@ -20,7 +20,7 @@ app = FastAPI(
     debug=settings.DEBUG
 )
 
-Add New Relic middleware for tracking requests
+# Add New Relic middleware for tracking requests
 class NewRelicMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         start_time = time.time()

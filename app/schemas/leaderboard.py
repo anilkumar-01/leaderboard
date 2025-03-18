@@ -8,11 +8,13 @@ class ScoreSubmit(BaseModel):
     score: int
     game_mode: Optional[str] = "default"
     
-    # @validator('score')
-    # def score_must_be_positive(cls, v):
-    #     if v < 0:
-    #         raise ValueError('score must be non-negative')
-    #     return v
+    @validator('score')
+    def score_must_be_in_valid_range(cls, v):
+        if v < 0:
+            raise ValueError('score must be non-negative')
+        if v > 10000:
+            raise ValueError('score must not exceed 10000')
+        return v
     
 class LeaderboardEntry(BaseModel):
     """Schema for a leaderboard entry."""

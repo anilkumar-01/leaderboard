@@ -17,56 +17,56 @@ def setup_database():
     Base.metadata.create_all(bind=engine)
     
     # Create database session
-    db = SessionLocal()
+    # db = SessionLocal()
     
-    try:
+    # try:
         # Check if test users exist
-        test_user_exists = db.query(User).filter(User.username == "testuser").first()
-        if not test_user_exists:
-            print("Creating test users...")
-            # Create test users
-            test_users = [
-                User(
-                    username=f"testuser{i}",
-                    email=f"testuser{i}@example.com",
-                    hashed_password=get_password_hash("password"),
-                    is_active=True
-                ) for i in range(1, 6)
-            ]
-            db.add_all(test_users)
-            db.commit()
+        # test_user_exists = db.query(User).filter(User.username == "testuser").first()
+        # if not test_user_exists:
+        #     print("Creating test users...")
+        #     # Create test users
+        #     test_users = [
+        #         User(
+        #             username=f"testuser{i}",
+        #             email=f"testuser{i}@example.com",
+        #             hashed_password=get_password_hash("password"),
+        #             is_active=True
+        #         ) for i in range(1, 6)
+        #     ]
+        #     db.add_all(test_users)
+        #     db.commit()
             
-            # Initialize leaderboard entries for test users
-            for i, user in enumerate(test_users):
-                # Add some initial scores so we have data to work with
-                test_leaderboard = Leaderboard(
-                    user_id=user.id,
-                    total_score=(5-i) * 100  # Different scores for ranking
-                )
-                db.add(test_leaderboard)
-            db.commit()
+        #     # Initialize leaderboard entries for test users
+        #     for i, user in enumerate(test_users):
+        #         # Add some initial scores so we have data to work with
+        #         test_leaderboard = Leaderboard(
+        #             user_id=user.id,
+        #             total_score=(5-i) * 100  # Different scores for ranking
+        #         )
+        #         db.add(test_leaderboard)
+        #     db.commit()
         
         # Update leaderboard ranks
-        print("Updating leaderboard ranks...")
-        db.execute(text("""
-            UPDATE leaderboard
-            SET rank = ranks.rank
-            FROM (
-                SELECT user_id, RANK() OVER (ORDER BY total_score DESC) as rank
-                FROM leaderboard
-            ) ranks
-            WHERE leaderboard.user_id = ranks.user_id
-        """))
-        db.commit()
+        # print("Updating leaderboard ranks...")
+        # db.execute(text("""
+        #     UPDATE leaderboard
+        #     SET rank = ranks.rank
+        #     FROM (
+        #         SELECT user_id, RANK() OVER (ORDER BY total_score DESC) as rank
+        #         FROM leaderboard
+        #     ) ranks
+        #     WHERE leaderboard.user_id = ranks.user_id
+        # """))
+        # db.commit()
         
-        print("Database setup completed successfully!")
+        # print("Database setup completed successfully!")
     
-    except Exception as e:
-        print(f"Error setting up database: {e}")
-        db.rollback()
+    # except Exception as e:
+    #     print(f"Error setting up database: {e}")
+    #     db.rollback()
     
-    finally:
-        db.close()
+    # finally:
+    #     db.close()
 
 def add_indexes():
     """Add performance indexes to the database"""

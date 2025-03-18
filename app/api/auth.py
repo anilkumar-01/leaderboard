@@ -37,16 +37,10 @@ def signup(
     if db.query(User).filter(User.username == user_in.username).first():
         raise ConflictError(detail="Username already registered")
     
-    # Check if email already exists
-    if db.query(User).filter(User.email == user_in.email).first():
-        raise ConflictError(detail="Email already registered")
-    
     # Create new user
     user = User(
         username=user_in.username,
-        email=user_in.email,
-        hashed_password=get_password_hash(user_in.password),
-        is_active=True,
+        hashed_password=get_password_hash(user_in.password)
     )
     
     db.add(user)
@@ -56,7 +50,7 @@ def signup(
     return ResponseBase[UserResponse](
         success=True,
         message="User created successfully",
-        data=UserResponse.from_attributes(user)
+        data=UserResponse.model_validate(user)
     )
 
 @router.post("/login", response_model=Token)
@@ -80,10 +74,6 @@ def login(
     # Verify user exists and password is correct
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise UnauthorizedError(detail="Incorrect username or password")
-    
-    # Check if user is active
-    if not user.is_active:
-        raise UnauthorizedError(detail="Inactive user")
     
     # Create access token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
