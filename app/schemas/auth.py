@@ -1,5 +1,5 @@
 # app/schemas/auth.py
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import datetime
 
@@ -11,13 +11,13 @@ class UserCreate(UserBase):
     """Schema for user creation."""
     password: str
     
-    @validator('password')
+    @field_validator('password')
     def password_must_be_strong(cls, v):
         if len(v) < 8:
             raise ValueError('password must be at least 8 characters')
         return v
     
-    @validator('username')
+    @field_validator('username')
     def username_must_be_valid(cls, v):
         if len(v) < 3:
             raise ValueError('username must be at least 3 characters')
@@ -35,7 +35,7 @@ class UserResponse(UserBase):
     id: int
     join_date: datetime
     
-    class Config:
+    class ConfigDict:
         from_attributes = True
 
 class Token(BaseModel):
